@@ -54,9 +54,36 @@ export default function ReportePage() {
     });
     return { income, expense, balance: income - expense, count: transactions.length };
   }, [transactions]);
-  const categoryBreakdown = report?.byCategory  ?? [];
-  const incomeRows        = categoryBreakdown.filter((r) => r.type === 'Ingreso');
-  const expenseRows       = categoryBreakdown.filter((r) => r.type === 'Egreso');
+  const { incomeRows, expenseRows } = useMemo(() => {
+    const incomeMap  = {};
+    const expenseMap = {};
+
+    transactions.forEach((t) => {
+      const usd = Number(t.amount_usd) || 0;
+      const map = t.type === 'Ingreso' ? incomeMap : expenseMap;
+      if (!map[t.category]) {
+        map[t.category] = {
+          name:  t.category,
+          type:  t.type,
+          count: 0,
+          total: 0,
+          color: t.category_color ?? CATEGORY_COLORS[t.category] ?? '#6b7280',
+        };
+      }
+      map[t.category].count++;
+      map[t.category].total += usd;
+    });
+
+    const toRows = (map, typeTotal) =>
+      Object.values(map)
+        .sort((a, b) => b.total - a.total)
+        .map((r) => ({ ...r, pct: typeTotal > 0 ? Math.round((r.total / typeTotal) * 100) : 0 }));
+
+    return {
+      incomeRows:  toRows(incomeMap,  summary.income),
+      expenseRows: toRows(expenseMap, summary.expense),
+    };
+  }, [transactions, summary]);
 
   function handleExportCSV() {
     exportCSV({ transactions, summary, dateFrom, dateTo });
@@ -217,7 +244,7 @@ function CategoryTable({ title, rows, total, accent }) {
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
         <h2 className="text-sm font-semibold text-slate-700">{title}</h2>
-        <span className={`text-sm font-bold ${accentColor}`}>{formatMoney(total)}</span>
+        <span className={`text-sm font-bold ${accentColor}`}>{formatUSD(total)}</span>
       </div>
 
       {rows.length === 0 ? (
@@ -233,7 +260,7 @@ function CategoryTable({ title, rows, total, accent }) {
                   <span className="text-xs text-slate-400">({r.count})</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-sm font-semibold text-slate-800">{formatMoney(r.total)}</span>
+                  <span className="text-sm font-semibold text-slate-800">{formatUSD(r.total)}</span>
                   <span className="text-xs text-slate-400 ml-1.5">{r.pct}%</span>
                 </div>
               </div>
