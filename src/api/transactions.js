@@ -99,19 +99,25 @@ export async function createTransaction(payload) {
 
     // Sanitise
     const currency = payload.currency ?? 'USD';
+    const amount = parseFloat(payload.amount);
+    const exchangeRate = payload.exchange_rate !== '' && payload.exchange_rate != null
+      ? parseFloat(payload.exchange_rate)
+      : null;
+
     const clean = {
       date:           payload.date,
       type:           payload.type,
       category:       payload.category.trim(),
       concept:        payload.concept.trim(),
-      amount:         parseFloat(payload.amount),
+      amount,
       payment_method: payload.payment_method,
       registered_by:  payload.registered_by,
       notes:          (payload.notes ?? '').trim(),
       currency,
+      exchange_rate:  currency === 'ARS' ? exchangeRate : null,
       amount_usd:     currency === 'USD'
-        ? parseFloat(payload.amount)
-        : (payload.amount_usd !== '' && payload.amount_usd != null ? parseFloat(payload.amount_usd) : null),
+        ? amount
+        : (exchangeRate ? Number((amount / exchangeRate).toFixed(2)) : null),
     };
 
     const { data, error } = await dbInsert(clean);

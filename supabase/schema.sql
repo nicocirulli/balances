@@ -60,6 +60,9 @@ create table if not exists public.transactions (
   category_id    uuid          not null references public.categories(id),
 
   amount         numeric(12,2) not null check (amount > 0),
+  currency       text          not null check (currency in ('USD','ARS')) default 'USD',
+  amount_usd     numeric(12,2),
+  exchange_rate  numeric(12,4),
   payment_method text          not null default 'Efectivo',
 
   -- Denormalised display name ("NICO" | "CLAU") — avoids joining auth.users

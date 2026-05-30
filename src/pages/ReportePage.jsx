@@ -7,6 +7,9 @@ import { formatMoney, formatUSD, CATEGORY_COLORS } from '../constants';
 import SummaryCards  from '../components/SummaryCards';
 import DateRangePicker from '../components/DateRangePicker';
 import PieChartCard  from '../components/PieChartCard';
+import BarChartCard  from '../components/BarChartCard';
+import MetricCard    from '../components/MetricCard';
+import TopCategoriesList from '../components/TopCategoriesList';
 import CategoryPill  from '../components/CategoryPill';
 import UserBadge     from '../components/UserBadge';
 
@@ -85,6 +88,38 @@ export default function ReportePage() {
     };
   }, [transactions, summary]);
 
+  const dashboardMetrics = useMemo(() => {
+    const incomeByDate = {};
+    const expenseByDate = {};
+    const start = new Date(dateFrom + 'T12:00:00');
+    const end = new Date(dateTo + 'T12:00:00');
+    const days = Math.max(1, Math.round((end - start) / 86400000) + 1);
+
+    transactions.forEach((t) => {
+      const amount = Number(t.amount_usd) || 0;
+      if (t.type === 'Ingreso') {
+        incomeByDate[t.date] = (incomeByDate[t.date] || 0) + amount;
+      } else {
+        expenseByDate[t.date] = (expenseByDate[t.date] || 0) + amount;
+      }
+    });
+
+    const bestIncomeEntry = Object.entries(incomeByDate).sort((a, b) => b[1] - a[1])[0] ?? [null, 0];
+    const bestExpenseEntry = Object.entries(expenseByDate).sort((a, b) => b[1] - a[1])[0] ?? [null, 0];
+
+    return {
+      topIncomeCategory: incomeRows[0] ?? null,
+      topExpenseCategory: expenseRows[0] ?? null,
+      bestIncomeDay: bestIncomeEntry[0],
+      bestIncomeAmount: bestIncomeEntry[1],
+      bestExpenseDay: bestExpenseEntry[0],
+      bestExpenseAmount: bestExpenseEntry[1],
+      avgDailyIncome: summary.income / days,
+      avgDailyExpense: summary.expense / days,
+      periodDays: days,
+    };
+  }, [transactions, summary.income, summary.expense, dateFrom, dateTo, incomeRows, expenseRows]);
+
   function handleExportCSV() {
     exportCSV({ transactions, summary, dateFrom, dateTo });
   }
@@ -148,8 +183,48 @@ export default function ReportePage() {
           {/* ── Summary cards ── */}
           <SummaryCards {...summary} />
 
-          {/* ── Pie charts ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* ── Dashboard metrics ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <MetricCard
+              label="Categoría con mayor ingreso"
+              value={dashboardMetrics.topIncomeCategory?.name ?? 'Sin datos'}
+              sub={dashboardMetrics.topIncomeCategory ? formatUSD(dashboardMetrics.topIncomeCategory.total) : ''}
+              accent="bg-emerald-100"
+            />
+            <MetricCard
+              label="Categoría con mayor egreso"
+              value={dashboardMetrics.topExpenseCategory?.name ?? 'Sin datos'}
+              sub={dashboardMetrics.topExpenseCategory ? formatUSD(dashboardMetrics.topExpenseCategory.total) : ''}
+              accent="bg-rose-100"
+            />
+            <MetricCard
+              label="Día con más ingresos"
+              value={dashboardMetrics.bestIncomeDay ? fmtDate(dashboardMetrics.bestIncomeDay) : 'Sin datos'}
+              sub={dashboardMetrics.bestIncomeAmount ? formatUSD(dashboardMetrics.bestIncomeAmount) : ''}
+              accent="bg-slate-100"
+            />
+            <MetricCard
+              label="Día con más egresos"
+              value={dashboardMetrics.bestExpenseDay ? fmtDate(dashboardMetrics.bestExpenseDay) : 'Sin datos'}
+              sub={dashboardMetrics.bestExpenseAmount ? formatUSD(dashboardMetrics.bestExpenseAmount) : ''}
+              accent="bg-slate-100"
+            />
+            <MetricCard
+              label="Promedio diario de ingresos"
+              value={formatUSD(dashboardMetrics.avgDailyIncome)}
+              sub={`${dashboardMetrics.periodDays} días`}
+              accent="bg-emerald-100"
+            />
+            <MetricCard
+              label="Promedio diario de egresos"
+              value={formatUSD(dashboardMetrics.avgDailyExpense)}
+              sub={`${dashboardMetrics.periodDays} días`}
+              accent="bg-rose-100"
+            />
+          </div>
+
+          {/* ── Visualizaciones principales ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <PieChartCard
               title="Distribución de ingresos"
               total={summary.income}
@@ -162,6 +237,19 @@ export default function ReportePage() {
               data={expenseRows.map((r) => ({ name: r.name, value: r.total, color: r.color ?? CATEGORY_COLORS[r.name] ?? '#6b7280' }))}
               emptyLabel="Sin egresos en el período"
             />
+            <BarChartCard
+              title="Ingresos vs Egresos"
+              data={[{ name: 'Período seleccionado', income: summary.income, expense: summary.expense, balance: summary.balance }]}
+              type="comparison"
+              showLegend={true}
+              height={280}
+            />
+          </div>
+
+          {/* ── Top categorías ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <TopCategoriesList title="Top ingresos" rows={incomeRows} total={summary.income} accent="text-emerald-600" />
+            <TopCategoriesList title="Top egresos" rows={expenseRows} total={summary.expense} accent="text-rose-600" />
           </div>
 
           {/* ── Category breakdown tables ── */}
@@ -255,7 +343,7 @@ function CategoryTable({ title, rows, total, accent }) {
             <div key={r.name} className="px-5 py-3">
               <div className="flex justify-between items-center mb-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: r.color ?? CATEGORY_COLORS[r.name] ?? '#6b7280' }} />
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.color ?? CATEGORY_COLORS[r.name] ?? '#6b7280' }} />
                   <span className="text-sm text-slate-700">{r.name}</span>
                   <span className="text-xs text-slate-400">({r.count})</span>
                 </div>

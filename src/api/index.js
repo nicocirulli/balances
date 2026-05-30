@@ -130,13 +130,25 @@ export function validateTransaction(payload) {
   if (!VALID_CURRENCIES.includes(currency))
     errs.currency = 'Moneda debe ser USD o ARS.';
 
-  // amount_usd — required for USD, optional for ARS
+  // amount_usd — required for USD, auto-calculated for ARS
   if (currency === 'USD') {
     // will be set equal to amount — no extra validation needed
-  } else if (payload.amount_usd !== undefined && payload.amount_usd !== '' && payload.amount_usd !== null) {
-    const usd = Number(payload.amount_usd);
-    if (isNaN(usd) || usd < 0)
-      errs.amount_usd = 'El equivalente USD debe ser un número positivo.';
+  } else {
+    const rate = payload.exchange_rate;
+    if (rate === undefined || rate === null || rate === '') {
+      errs.exchange_rate = 'El tipo de cambio es requerido para ARS.';
+    } else {
+      const parsedRate = Number(rate);
+      if (isNaN(parsedRate) || parsedRate <= 0) {
+        errs.exchange_rate = 'El tipo de cambio debe ser un número mayor que cero.';
+      }
+    }
+
+    if (payload.amount_usd !== undefined && payload.amount_usd !== '' && payload.amount_usd !== null) {
+      const usd = Number(payload.amount_usd);
+      if (isNaN(usd) || usd < 0)
+        errs.amount_usd = 'El equivalente USD debe ser un número positivo.';
+    }
   }
 
   return errs;

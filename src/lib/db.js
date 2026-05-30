@@ -111,8 +111,11 @@ export async function insertTransaction(tx) {
 
     const currency   = tx.currency   ?? 'USD';
     const amount_usd = currency === 'USD'
-      ? tx.amount                                   // USD → amount_usd = amount
+      ? tx.amount
       : (tx.amount_usd != null && tx.amount_usd !== '' ? Number(tx.amount_usd) : null);
+    const exchange_rate = currency === 'ARS'
+      ? (tx.exchange_rate != null && tx.exchange_rate !== '' ? Number(tx.exchange_rate) : null)
+      : null;
 
     const payload = {
       date: tx.date, type: tx.type, concept: tx.concept,
@@ -121,6 +124,7 @@ export async function insertTransaction(tx) {
       user_id: userId, notes: tx.notes ?? '',
       currency,
       amount_usd,
+      exchange_rate,
     };
 
     const { data, error } = await supabase
@@ -135,12 +139,16 @@ export async function insertTransaction(tx) {
   const currency   = tx.currency ?? 'USD';
   const amount_usd = currency === 'USD' ? tx.amount
     : (tx.amount_usd != null && tx.amount_usd !== '' ? Number(tx.amount_usd) : null);
+  const exchange_rate = currency === 'ARS'
+    ? (tx.exchange_rate != null && tx.exchange_rate !== '' ? Number(tx.exchange_rate) : null)
+    : null;
 
   const newRow = {
     ...tx, id: crypto.randomUUID(), created_at: new Date().toISOString(),
     category_color: CATEGORY_COLORS[tx.category] ?? '#6b7280',
     currency,
     amount_usd,
+    exchange_rate,
   };
   lsSave([newRow, ...lsGetAll()]);
   return { data: newRow, error: null };

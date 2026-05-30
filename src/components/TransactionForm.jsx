@@ -5,6 +5,7 @@ import {
 } from '../constants';
 import { createTransaction }   from '../api/transactions';
 import { fetchCategories }     from '../lib/db';
+import { fetchBancoNacionVentaRate, EXCHANGE_RATE_SOURCE } from '../lib/exchange';
 import { validateTransaction } from '../api/index';
 import { useUser }             from '../context/UserContext';
 import UserBadge               from './UserBadge';
@@ -17,8 +18,8 @@ function buildEmpty(user) {
     category:       CATEGORIES[0].name,
     concept:        '',
     amount:         '',
-    amount_usd:     '',     // ARS → USD equiv (optional)
-    exchange_rate:  '',     // UI-only helper for auto-calc (not stored in DB)
+    amount_usd:     '',
+    exchange_rate:  '',
     payment_method: 'Efectivo',
     registered_by:  user,
     notes:          '',
@@ -49,6 +50,9 @@ export default function TransactionForm({ onAdded }) {
   const [submitError,  setSubmitError]  = useState(null);
   const [loading,      setLoading]      = useState(false);
   const [touched,      setTouched]      = useState({});
+  const [rate,         setRate]         = useState(null);
+  const [rateLoading,  setRateLoading]  = useState(false);
+  const [rateError,    setRateError]    = useState(null);
 
   useEffect(() => {
     fetchCategories().then(({ data }) => {
@@ -68,29 +72,67 @@ export default function TransactionForm({ onAdded }) {
     ? categoryList.map((c) => c.name)
     : CATEGORIES.map((c) => c.name);
 
-  // Auto-calc USD equiv when exchange rate changes
+  async function loadRate() {
+    if (form.currency !== 'ARS') return;
+    setRateLoading(true);
+    setRateError(null);
+
+    try {
+      const fetchedRate = await fetchBancoNacionVentaRate();
+      setRate(fetchedRate);
+      setForm((prev) => ({
+        ...prev,
+        exchange_rate: fetchedRate.toFixed(2),
+      }));
+    } catch (err) {
+      setRate(null);
+      setRateError(err?.message ?? 'No se pudo obtener la cotización.');
+    } finally {
+      setRateLoading(false);
+    }
+  }
+
   useEffect(() => {
-    if (form.currency !== 'ARS' || !form.amount || !form.exchange_rate) return;
+    if (form.currency !== 'ARS') return;
+    if (!form.amount || !form.exchange_rate) {
+      setForm((prev) => ({ ...prev, amount_usd: '' }));
+      return;
+    }
+
     const rate = parseFloat(form.exchange_rate);
     const amt  = parseFloat(form.amount);
     if (!isNaN(rate) && rate > 0 && !isNaN(amt)) {
-      const usd = (amt / rate).toFixed(2);
+      const usd = Number((amt / rate).toFixed(2));
       setForm((prev) => ({ ...prev, amount_usd: usd }));
     }
   }, [form.exchange_rate, form.amount, form.currency]);
 
+  useEffect(() => {
+    if (form.currency === 'ARS' && !form.exchange_rate) {
+      loadRate();
+    }
+  }, [form.currency]);
+
   function handleChange(e) {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === 'amount' && prev.currency === 'USD') {
+        next.amount_usd = value;
+      }
+      return next;
+    });
     if (fieldErrors[name]) setFieldErrors((prev) => { const n = { ...prev }; delete n[name]; return n; });
   }
 
   function handleCurrencyToggle(cur) {
+    setRateError(null);
+    setRate(null);
     setForm((prev) => ({
       ...prev,
       currency:      cur,
-      amount_usd:    '',
-      exchange_rate: '',
+      amount_usd:    cur === 'USD' ? prev.amount : '',
+      exchange_rate: cur === 'USD' ? '' : '',
     }));
   }
 
@@ -121,11 +163,6 @@ export default function TransactionForm({ onAdded }) {
 
   const isARS = form.currency === 'ARS';
   const fe    = fieldErrors;
-
-  // Preview USD auto-calc
-  const usdPreview = isARS && form.amount && form.exchange_rate
-    ? parseFloat(form.amount) / parseFloat(form.exchange_rate)
-    : null;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
@@ -222,56 +259,61 @@ export default function TransactionForm({ onAdded }) {
         {/* ── ARS → USD conversion block ── */}
         {isARS && (
           <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3.5 space-y-3">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-blue-700">
-              <DollarSign size={13} />
-              Equivalente en USD
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-blue-700">
+                  <DollarSign size={13} />
+                  Cotización BNA Venta
+                </div>
+                <p className="mt-1 text-sm font-semibold text-slate-900">
+                  {rateLoading ? 'Cargando cotización...' : rate ? `${formatUSD(rate)} ARS` : 'No disponible'}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Fuente: {EXCHANGE_RATE_SOURCE}
+                </p>
+              </div>
+              <button type="button" onClick={loadRate}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-60"
+                disabled={rateLoading}
+              >
+                <RefreshCw size={14} />
+                {rateLoading ? 'Actualizando' : 'Actualizar'}
+              </button>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              {/* Exchange rate helper */}
               <div>
                 <label className="block text-[10px] font-semibold text-blue-600/80 uppercase tracking-wide mb-1">
                   Tipo de cambio
                   <span className="normal-case font-normal text-blue-500 ml-1">(ARS por USD)</span>
                 </label>
-                <div className="relative">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-blue-400 text-xs select-none">÷</span>
-                  <input type="number" name="exchange_rate" value={form.exchange_rate}
-                    onChange={handleChange}
-                    placeholder="ej. 1200" min="1" step="1"
-                    className="w-full pl-6 pr-3 py-1.5 text-sm border border-blue-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-300 bg-white" />
-                </div>
-                {usdPreview !== null && !isNaN(usdPreview) && (
-                  <p className="text-[10px] text-blue-500 mt-0.5 flex items-center gap-1">
-                    <RefreshCw size={9} /> Auto: {formatUSD(usdPreview)}
-                  </p>
+                <input type="text" name="exchange_rate" value={form.exchange_rate}
+                  readOnly
+                  className="w-full pl-4 pr-3 py-2 text-sm border border-blue-200 rounded-lg bg-slate-50 text-slate-900" />
+                {rateError && (
+                  <p className="text-[10px] text-rose-600 mt-1">{rateError}</p>
                 )}
               </div>
 
-              {/* Direct USD equiv entry */}
               <div>
                 <label className="block text-[10px] font-semibold text-blue-600/80 uppercase tracking-wide mb-1">
-                  Valor USD
-                  <span className="normal-case font-normal text-blue-500 ml-1">(manual / confirmá)</span>
+                  USD equivalente
                 </label>
                 <div className="relative">
                   <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-blue-400 text-xs select-none">$</span>
-                  <input type="number" name="amount_usd" value={form.amount_usd}
-                    onChange={handleChange}
-                    placeholder="0.00" min="0" step="0.01"
-                    className={`w-full pl-6 pr-3 py-1.5 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-blue-300 bg-white ${
-                      fe.amount_usd ? 'border-rose-300' : 'border-blue-200'
-                    }`} />
+                  <input type="text" value={form.amount_usd}
+                    readOnly
+                    className="w-full pl-7 pr-3 py-2 text-sm border border-blue-200 rounded-lg bg-slate-50 text-slate-900" />
                 </div>
-                <FieldError msg={fe.amount_usd} />
               </div>
             </div>
 
             <p className="text-[10px] text-blue-500">
-              Podés ingresar el tipo de cambio para auto-calcular, o escribir el valor USD directamente.
+              La cotización se obtiene automáticamente desde {EXCHANGE_RATE_SOURCE} y se usa para calcular el equivalente en USD.
             </p>
           </div>
         )}
+
 
         {/* ── Concepto ── */}
         <div>
@@ -326,7 +368,7 @@ export default function TransactionForm({ onAdded }) {
           </div>
         )}
 
-        <button type="submit" disabled={loading}
+        <button type="submit" disabled={loading || (isARS && (!rate || rateError))}
           className="w-full flex justify-center items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-sm shadow-indigo-200"
         >
           {loading ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
