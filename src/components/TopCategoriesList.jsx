@@ -8,7 +8,7 @@
  * total number
  * accent string
  */
-import { formatMoney, CATEGORY_COLORS } from '../constants';
+import { formatUSD, CATEGORY_COLORS } from '../constants';
 
 export default function TopCategoriesList({ title, rows = [], total = 0, accent = 'text-slate-800' }) {
   const topRows = rows.slice(0, 3);
@@ -17,7 +17,7 @@ export default function TopCategoriesList({ title, rows = [], total = 0, accent 
       <div className="flex items-center justify-between gap-2 mb-4">
         <div>
           <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-          <p className="text-xs text-slate-400">Total: {formatMoney(total)}</p>
+          <p className="text-xs text-slate-400">Total: {formatUSD(total)}</p>
         </div>
         <span className={`text-xs font-semibold ${accent}`}>{rows.length} categorías</span>
       </div>
@@ -38,7 +38,7 @@ export default function TopCategoriesList({ title, rows = [], total = 0, accent 
                     <p className="text-xs text-slate-400">{row.pct}% del total</p>
                   </div>
                 </div>
-                <p className="text-sm font-semibold text-slate-900 tabular-nums">{formatMoney(row.total)}</p>
+                <p className="text-sm font-semibold text-slate-900 tabular-nums">{formatUSD(row.total)}</p>
               </div>
             );
           })}

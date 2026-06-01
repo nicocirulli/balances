@@ -80,6 +80,11 @@ export default function BarChartCard({
             tick={{ fontSize: 12, fill: '#64748b' }}
             axisLine={false}
             tickLine={false}
+            tickFormatter={(v) =>
+              `$${Number(v).toLocaleString('en-US', {
+                maximumFractionDigits: 0,
+              })}`
+            }
           />
           <Tooltip content={<CustomTooltip type={type} />} />
           {showLegend && <Legend />}

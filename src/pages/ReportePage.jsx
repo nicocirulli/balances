@@ -88,6 +88,11 @@ export default function ReportePage() {
     };
   }, [transactions, summary]);
 
+  const pending = useMemo(
+    () => transactions.filter((t) => t.currency === 'ARS' && t.amount_usd == null).length,
+    [transactions]
+  );
+
   const dashboardMetrics = useMemo(() => {
     const incomeByDate = {};
     const expenseByDate = {};
@@ -181,7 +186,7 @@ export default function ReportePage() {
       ) : (
         <>
           {/* ── Summary cards ── */}
-          <SummaryCards {...summary} />
+          <SummaryCards {...summary} pending={pending} />
 
           {/* ── Dashboard metrics ── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">

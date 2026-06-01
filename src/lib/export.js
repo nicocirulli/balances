@@ -103,18 +103,18 @@ export function exportCSV({ transactions, summary, dateFrom, dateTo, filename })
 
     // ── Transactions
     csvCell('LISTADO DE MOVIMIENTOS'),
-    ['Fecha', 'Concepto', 'Categoría', 'Tipo', 'Monto', 'Medio de pago', 'Registrado por', 'Notas']
+    ['Fecha', 'Concepto', 'Categoría', 'Tipo', 'Monto', 'Moneda', 'Medio de pago', 'Registrado por', 'Notas']
       .map(csvCell).join(','),
     ...transactions.map((t) =>
-      [fmtDate(t.date), t.concept, t.category, t.type, t.amount, t.payment_method, t.registered_by, t.notes ?? '']
+      [fmtDate(t.date), t.concept, t.category, t.type, t.amount, t.currency, t.payment_method, t.registered_by, t.notes ?? '']
         .map(csvCell).join(',')
     ),
 
     // ── Totals row
     '',
-    ['', '', '', 'TOTAL INGRESOS', formatUSD(summary.income), '', '', ''].map(csvCell).join(','),
-    ['', '', '', 'TOTAL EGRESOS',  formatUSD(summary.expense), '', '', ''].map(csvCell).join(','),
-    ['', '', '', 'BALANCE NETO',   formatUSD(summary.balance), '', '', ''].map(csvCell).join(','),
+    ['', '', '', 'TOTAL INGRESOS', formatUSD(summary.income), '', '', '', ''].map(csvCell).join(','),
+    ['', '', '', 'TOTAL EGRESOS',  formatUSD(summary.expense), '', '', '', ''].map(csvCell).join(','),
+    ['', '', '', 'BALANCE NETO',   formatUSD(summary.balance), '', '', '', ''].map(csvCell).join(','),
   ];
 
   const csv  = '\uFEFF' + lines.join('\n');
@@ -433,7 +433,7 @@ export function exportPDF({ transactions, summary, dateFrom, dateTo, filename })
   const renderTopRows = (rows, startX) => {
     rows.slice(0, 3).forEach((row, index) => {
       const yPos = sectionY + 8 + index * 10;
-      doc.setFillColor(row.color ? hexToRgb(row.color) : [148, 163, 184]);
+      doc.setFillColor(...(row.color ? hexToRgb(row.color) : [148, 163, 184]));
       doc.rect(startX, yPos - 6, 4, 4, 'F');
       doc.setTextColor(15, 23, 42);
       doc.text(`${index + 1}. ${row.name}`, startX + 8, yPos - 1);
@@ -512,7 +512,7 @@ export function exportPDF({ transactions, summary, dateFrom, dateTo, filename })
       t.concept,
       t.category,
       t.type,
-      formatUSD(Number(t.amount_usd) || Number(t.amount) || 0),
+      formatUSD(Number(t.amount_usd) || 0),
       t.registered_by,
     ]),
     foot: [['', '', '', 'TOTAL INGRESOS', formatUSD(summary.income), ''], ['', '', '', 'TOTAL EGRESOS', formatUSD(summary.expense), ''], ['', '', '', 'BALANCE NETO', formatUSD(summary.balance), '']],

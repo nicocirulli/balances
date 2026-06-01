@@ -35,18 +35,20 @@ export async function getReport({ dateFrom, dateTo } = {}) {
 
     const items = data ?? [];
 
-    // ── Summary
+    // ── Summary (all values in USD)
     let income = 0, expense = 0;
     items.forEach((t) => {
-      if (t.type === 'Ingreso') income  += Number(t.amount);
-      else                       expense += Number(t.amount);
+      const usd = Number(t.amount_usd) || 0;
+      if (t.type === 'Ingreso') income  += usd;
+      else                       expense += usd;
     });
     const summary = { income, expense, balance: income - expense, count: items.length };
 
-    // ── By category
+    // ── By category (USD)
     const catMap = {};
     const grand  = income + expense;
     items.forEach((t) => {
+      const usd = Number(t.amount_usd) || 0;
       if (!catMap[t.category]) {
         catMap[t.category] = {
           name:  t.category,
@@ -57,20 +59,21 @@ export async function getReport({ dateFrom, dateTo } = {}) {
         };
       }
       catMap[t.category].count++;
-      catMap[t.category].total += Number(t.amount);
+      catMap[t.category].total += usd;
     });
     const byCategory = Object.values(catMap)
       .sort((a, b) => b.total - a.total)
       .map((r) => ({ ...r, pct: grand > 0 ? Math.round((r.total / grand) * 100) : 0 }));
 
-    // ── By user
+    // ── By user (USD)
     const byUser = { NICO: { income: 0, expense: 0, count: 0 }, CLAU: { income: 0, expense: 0, count: 0 } };
     items.forEach((t) => {
       const u = byUser[t.registered_by];
       if (!u) return;
+      const usd = Number(t.amount_usd) || 0;
       u.count++;
-      if (t.type === 'Ingreso') u.income  += Number(t.amount);
-      else                       u.expense += Number(t.amount);
+      if (t.type === 'Ingreso') u.income  += usd;
+      else                       u.expense += usd;
     });
 
     return ok({ period: { dateFrom, dateTo }, summary, byCategory, byUser, items });
@@ -109,12 +112,13 @@ export async function getMonthlyTrend(months = 6) {
       slots[key] = { key, label: label.charAt(0).toUpperCase() + label.slice(1), income: 0, expense: 0, balance: 0 };
     }
 
-    // Aggregate
+    // Aggregate (USD)
     (data ?? []).forEach((t) => {
       const key = t.date.slice(0, 7);
       if (!slots[key]) return;
-      if (t.type === 'Ingreso') slots[key].income  += Number(t.amount);
-      else                       slots[key].expense += Number(t.amount);
+      const usd = Number(t.amount_usd) || 0;
+      if (t.type === 'Ingreso') slots[key].income  += usd;
+      else                       slots[key].expense += usd;
     });
 
     // Compute balance per month
