@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard, ArrowLeftRight, FileBarChart2,
-  LogOut, Activity,
+  LogOut, Activity, Plus,
 } from 'lucide-react';
+import QuickEntryModal from './QuickEntryModal';
 import { isConfigured } from '../lib/supabase';
 import { useAuth }  from '../context/AuthContext';
 import { useUser }  from '../context/UserContext';
@@ -18,6 +20,7 @@ const NAV = [
 export default function Layout() {
   const { logout }                        = useAuth();
   const { activeUser, switchUser, isAuthMode } = useUser();
+  const [showModal, setShowModal] = useState(false);
 
   return (
     <div className="min-h-screen bg-stone-50 text-slate-800">
@@ -59,6 +62,14 @@ export default function Layout() {
 
           {/* Right side */}
           <div className="flex items-center gap-2 flex-shrink-0">
+
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-sm font-semibold px-3 py-2 rounded-xl transition-colors shadow-sm"
+            >
+              <Plus size={15} />
+              <span className="hidden sm:inline">Nuevo</span>
+            </button>
 
             {isAuthMode ? (
               <>
@@ -116,6 +127,14 @@ export default function Layout() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-7">
         <Outlet />
       </main>
+
+      {showModal && (
+        <QuickEntryModal
+          type="Ingreso"
+          onClose={() => setShowModal(false)}
+          onAdded={() => setShowModal(false)}
+        />
+      )}
     </div>
   );
 }

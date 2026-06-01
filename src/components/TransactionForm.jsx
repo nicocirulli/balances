@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, TrendingUp, TrendingDown, Loader2, AlertCircle, DollarSign, RefreshCw } from 'lucide-react';
 import {
   USERS, PAYMENT_METHODS, CATEGORIES, USER_COLORS, today, formatUSD,
@@ -10,10 +10,10 @@ import { validateTransaction } from '../api/index';
 import { useUser }             from '../context/UserContext';
 import UserBadge               from './UserBadge';
 
-function buildEmpty(user) {
+function buildEmpty(user, initialType = 'Ingreso') {
   return {
     date:           today(),
-    type:           'Ingreso',
+    type:           initialType,
     currency:       'USD',
     category:       CATEGORIES[0].name,
     concept:        '',
@@ -42,10 +42,20 @@ function cls(err) {
     : 'border-slate-200 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400'}`;
 }
 
-export default function TransactionForm({ onAdded }) {
+export default function TransactionForm({
+  onAdded,
+  initialType     = 'Ingreso',
+  showTitle       = true,
+  quickCategories = [],
+  autoFocusAmount = false,
+  onSavedAndNew   = null,
+  initialCategory = null,
+  large           = false,
+  submitLabel     = 'Agregar movimiento',
+}) {
   const { activeUser, isAuthMode } = useUser();
   const [categoryList, setCategoryList] = useState([]);
-  const [form,         setForm]         = useState(() => buildEmpty(activeUser));
+  const [form,         setForm]         = useState(() => buildEmpty(activeUser, initialType));
   const [fieldErrors,  setFieldErrors]  = useState({});
   const [submitError,  setSubmitError]  = useState(null);
   const [loading,      setLoading]      = useState(false);
@@ -54,11 +64,16 @@ export default function TransactionForm({ onAdded }) {
   const [rateLoading,  setRateLoading]  = useState(false);
   const [rateError,    setRateError]    = useState(null);
 
+  const amountRef         = useRef(null);
+  const categoryPresetRef = useRef(initialCategory);
+
   useEffect(() => {
     fetchCategories().then(({ data }) => {
       if (data?.length) {
         setCategoryList(data);
-        setForm((prev) => ({ ...prev, category: data[0].name }));
+        if (!categoryPresetRef.current) {
+          setForm((prev) => ({ ...prev, category: data[0].name }));
+        }
       }
     });
   }, []);
@@ -113,6 +128,15 @@ export default function TransactionForm({ onAdded }) {
     }
   }, [form.currency]);
 
+  useEffect(() => {
+    if (categoryPresetRef.current) {
+      setForm((prev) => ({ ...prev, category: categoryPresetRef.current }));
+    }
+    if (autoFocusAmount) {
+      setTimeout(() => amountRef.current?.focus(), 50);
+    }
+  }, []);
+
   function handleChange(e) {
     const { name, value } = e.target;
     setForm((prev) => {
@@ -144,8 +168,7 @@ export default function TransactionForm({ onAdded }) {
     else setFieldErrors((prev) => { const n = { ...prev }; delete n[name]; return n; });
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
+  async function runSubmit(keepOpen) {
     setTouched({ date: true, concept: true, amount: true, category: true });
     setSubmitError(null);
     setLoading(true);
@@ -157,18 +180,36 @@ export default function TransactionForm({ onAdded }) {
       return;
     }
     setFieldErrors({}); setSubmitError(null); setTouched({});
-    onAdded?.(data);
-    setForm((prev) => ({ ...buildEmpty(activeUser), date: prev.date, currency: prev.currency }));
+    if (keepOpen) {
+      setForm((prev) => ({
+        ...buildEmpty(activeUser, prev.type),
+        type:           prev.type,
+        currency:       prev.currency,
+        payment_method: prev.payment_method,
+        registered_by:  prev.registered_by,
+        category:       prev.category,
+        date:           prev.date,
+      }));
+      setTimeout(() => amountRef.current?.focus(), 0);
+      onSavedAndNew?.(data);
+    } else {
+      onAdded?.(data);
+      setForm((prev) => ({ ...buildEmpty(activeUser), date: prev.date, currency: prev.currency }));
+    }
   }
+
+  function handleSubmit(e) { e.preventDefault(); runSubmit(false); }
 
   const isARS = form.currency === 'ARS';
   const fe    = fieldErrors;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
-      <h2 className="text-sm font-bold text-slate-800 mb-5 pb-3 border-b border-slate-100 tracking-tight">
-        Nuevo movimiento
-      </h2>
+      {showTitle && (
+        <h2 className="text-sm font-bold text-slate-800 mb-5 pb-3 border-b border-slate-100 tracking-tight">
+          Nuevo movimiento
+        </h2>
+      )}
 
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
 
@@ -176,7 +217,7 @@ export default function TransactionForm({ onAdded }) {
         <div className="grid grid-cols-2 gap-2">
           {['Ingreso', 'Egreso'].map((t) => (
             <label key={t}
-              className={`flex items-center justify-center gap-2 py-2.5 border rounded-xl cursor-pointer text-sm font-semibold transition-all ${
+              className={`flex items-center justify-center gap-2 ${large ? 'min-h-12 py-2.5' : 'py-2.5'} border rounded-xl cursor-pointer text-sm font-semibold transition-all ${
                 form.type === t
                   ? t === 'Ingreso'
                     ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm'
@@ -200,7 +241,7 @@ export default function TransactionForm({ onAdded }) {
           <div className="grid grid-cols-2 gap-2">
             {['USD', 'ARS'].map((cur) => (
               <button key={cur} type="button" onClick={() => handleCurrencyToggle(cur)}
-                className={`py-2 rounded-xl text-sm font-bold border transition-all ${
+                className={`${large ? 'min-h-12 ' : ''}py-2 rounded-xl text-sm font-bold border transition-all ${
                   form.currency === cur
                     ? cur === 'USD'
                       ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
@@ -231,6 +272,31 @@ export default function TransactionForm({ onAdded }) {
           </div>
         </div>
 
+        {/* ── Quick categories ── */}
+        {quickCategories.length > 0 && (
+          <div>
+            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-2">
+              Categoría rápida
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {quickCategories.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, category: name }))}
+                  className={`px-3 py-2.5 min-h-11 rounded-xl text-sm font-semibold border transition-all ${
+                    form.category === name
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-700'
+                  }`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Category + Amount ── */}
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -247,10 +313,20 @@ export default function TransactionForm({ onAdded }) {
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm select-none">$</span>
-              <input type="number" name="amount" value={form.amount}
-                onChange={handleChange} onBlur={handleBlur}
-                placeholder="0" min="0.01" step="0.01" required
-                className={`${cls(touched.amount && fe.amount)} pl-7`} />
+              <input
+                ref={amountRef}
+                type="number"
+                name="amount"
+                value={form.amount}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                onFocus={(e) => { const t = e.target; setTimeout(() => { try { t.select(); } catch {} }, 0); }}
+                placeholder="0"
+                min="0.01"
+                step="0.01"
+                required
+                className={`${cls(touched.amount && fe.amount)} pl-7`}
+              />
             </div>
             <FieldError msg={touched.amount && fe.amount} />
           </div>
@@ -369,11 +445,23 @@ export default function TransactionForm({ onAdded }) {
         )}
 
         <button type="submit" disabled={loading || (isARS && (!rate || rateError))}
-          className="w-full flex justify-center items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-sm shadow-indigo-200"
+          className={`w-full flex justify-center items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white ${large ? 'py-3.5' : 'py-2.5'} rounded-xl font-semibold text-sm transition-colors shadow-sm shadow-indigo-200`}
         >
           {loading ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-          {loading ? 'Guardando...' : 'Agregar movimiento'}
+          {loading ? 'Guardando...' : submitLabel}
         </button>
+
+        {onSavedAndNew && (
+          <button
+            type="button"
+            onClick={() => runSubmit(true)}
+            disabled={loading || (isARS && (!rate || rateError))}
+            className={`w-full flex justify-center items-center gap-2 border-2 border-indigo-400 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 ${large ? 'py-3' : 'py-2'} rounded-xl font-semibold text-sm transition-colors`}
+          >
+            <RefreshCw size={15} />
+            {loading ? 'Guardando...' : 'Guardar y cargar otro'}
+          </button>
+        )}
       </form>
     </div>
   );

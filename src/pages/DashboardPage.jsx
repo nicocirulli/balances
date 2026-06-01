@@ -3,15 +3,16 @@ import { Link } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 
 import { listTransactions } from '../api/transactions';
 import { getMonthlyTrend }  from '../api/reports';
 import { currentMonth, formatUSD, formatMoney, sumUSD, CATEGORY_COLORS, USER_COLORS } from '../constants';
-import SummaryCards    from '../components/SummaryCards';
-import TransactionList from '../components/TransactionList';
-import MonthPicker     from '../components/MonthPicker';
-import PieChartCard    from '../components/PieChartCard';
+import SummaryCards      from '../components/SummaryCards';
+import TransactionList   from '../components/TransactionList';
+import MonthPicker       from '../components/MonthPicker';
+import PieChartCard      from '../components/PieChartCard';
+import QuickEntryModal   from '../components/QuickEntryModal';
 
 function TrendTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -69,6 +70,8 @@ export default function DashboardPage() {
   const [trend,        setTrend]        = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [trendLoading, setTrendLoading] = useState(true);
+  const [showModal,    setShowModal]    = useState(false);
+  const [modalType,    setModalType]    = useState('Ingreso');
 
   useEffect(() => {
     setLoading(true);
@@ -123,8 +126,36 @@ export default function DashboardPage() {
     setTransactions((prev) => prev.filter((t) => t.id !== id));
   }
 
+  function openQuick(type) {
+    setModalType(type);
+    setShowModal(true);
+  }
+
+  function handleQuickAdded(newTx) {
+    setTransactions((prev) => [newTx, ...prev]);
+    setShowModal(false);
+  }
+
   return (
     <div className="space-y-5">
+
+      {/* ── Acceso rápido ── */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => openQuick('Ingreso')}
+          className="flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white rounded-2xl px-4 py-5 min-h-18 transition-colors shadow-sm select-none"
+        >
+          <TrendingUp size={22} />
+          <span className="text-base font-bold">Registrar cobro</span>
+        </button>
+        <button
+          onClick={() => openQuick('Egreso')}
+          className="flex items-center justify-center gap-3 bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white rounded-2xl px-4 py-5 min-h-18 transition-colors shadow-sm select-none"
+        >
+          <TrendingDown size={22} />
+          <span className="text-base font-bold">Registrar gasto</span>
+        </button>
+      </div>
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -204,6 +235,14 @@ export default function DashboardPage() {
             <TransactionList transactions={transactions} onDeleted={handleDelete} compact />
           </div>
         </>
+      )}
+
+      {showModal && (
+        <QuickEntryModal
+          type={modalType}
+          onClose={() => setShowModal(false)}
+          onAdded={handleQuickAdded}
+        />
       )}
     </div>
   );
